@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>インターネット掲示板</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .post-form, .reply-form {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+        .post-form input, .post-form textarea, .reply-form input, .reply-form textarea {
+            margin-bottom: 10px;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .post-form button, .reply-form button {
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .posts {
+            list-style: none;
+            padding: 0;
+        }
+        .post, .reply {
+            background-color: #f9f9f9;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 5px solid #007BFF;
+        }
+        .reply {
+            margin-left: 20px;
+            border-color: #28a745;
+        }
+        .post time, .reply time {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .post .username, .reply .username {
+            font-weight: bold;
+            color: #007BFF;
+        }
+        .reply .username {
+            color: #28a745;
+        }
+        .reply-button {
+            background: none;
+            border: none;
+            color: #007BFF;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>インターネット掲示板</h1>
+        <form class="post-form" id="postForm">
+            <input type="text" id="username" placeholder="ユーザー名" required>
+            <textarea id="postContent" placeholder="メッセージを入力してください" required></textarea>
+            <button type="submit">投稿</button>
+        </form>
+        <ul class="posts" id="postsList">
+            <!-- 投稿はここに表示されます -->
+        </ul>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+
+        // サーバーから投稿を取得して表示
+        async function fetchPosts() {
+            const response = await fetch(`${API_URL}/posts`);
+            const posts = await response.json();
+            const postsList = document.getElementById('postsList');
+            postsList.innerHTML = '';
+            posts.forEach(post => {
+                const postElement = createPostElement(post);
+                postsList.appendChild(postElement);
+            });
+        }
+
+        // 新しい投稿を作成
+        document.getElementById('postForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const content = document.getElementById('postContent').value.trim();
+            if (username === '' || content === '') return;
+            const response = await fetch(`${API_URL}/posts`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, content }),
+            });
+            const post = await response.json();
+            const postElement = createPostElement(post);
+            document.getElementById('postsList').prepend(postElement);
+            document.getElementById('postForm').reset();
+        });
+
+        // 投稿要素を作成
+        function createPostElement(post) {
+            const postElement = document.createElement('li');
+            postElement.className = 'post';
+            postElement.innerHTML = `
+                <p class="username">${post.username}</p>
+                <p>${post.content}</p>
+                <time>${new Date(post.timestamp).toLocaleString()}</time>
+                <button class="reply-button" onclick="showReplyForm(this, '${post._id}')">返信</button>
+                <ul class="replies">
+                    ${post.replies.map(reply => `
+                        <li class="reply">
+                            <p class="username">${reply.username}</p>
+                            <p>${reply.content}</p>
+                            <time>${new Date(reply.timestamp).toLocaleString()}</time>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+            return postElement;
+        }
+
+        // 返信フォームを表示
+        function showReplyForm(button, postId) {
+            if (button.nextElementSibling && button.nextElementSibling.classList.contains('reply-form')) {
+                return;
+            }
+            const replyForm = document.createElement('form');
+            replyForm.className = 'reply-form';
+            replyForm.innerHTML = `
+                <input type="text" placeholder="ユーザー名" required>
+                <textarea placeholder="返信を入力してください" required></textarea>
+                <button type="submit">返信</button>
+            `;
+            replyForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const username = replyForm.querySelector('input').value.trim();
+                const content = replyForm.querySelector('textarea').value.trim();
+                if (username === '' || content === '') return;
+                const response = await fetch(`${API_URL}/posts/${postId}/replies`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, content }),
+                });
+                const post = await response.json();
+                const postElement = createPostElement(post);
+                document.getElementById('postsList').replaceChild(postElement, button.closest('li'));
+                replyForm.reset();
+            });
+            button.parentNode.insertBefore(replyForm, button.nextElementSibling);
+        }
+
+        // 初期ロード時に投稿を取得して表示
+        fetchPosts();
+    </script>
+</body>
+</html>
